@@ -1,0 +1,837 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Truth or Dare — অনলাইন মাল্টিপ্লেয়ার</title>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+<style>
+  :root {
+    --bg:#0a0612; --card:#150f24; --card-2:#1e1633;
+    --truth:#00d9ff; --dare:#ff2d75; --gold:#ffd700;
+    --text:#f1eaff; --muted:#8b7ba8; --border:#2a2040;
+    --green:#22c55e; --red:#ef4444;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{
+    font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);
+    min-height:100vh;overflow-x:hidden;
+    background-image:radial-gradient(circle at 20% 20%,rgba(0,217,255,.08),transparent 40%),
+                     radial-gradient(circle at 80% 80%,rgba(255,45,117,.08),transparent 40%);
+  }
+  button{font-family:inherit;cursor:pointer;border:none;color:inherit}
+  input{font-family:inherit}
+  .hidden{display:none!important}
+
+  .login-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:1rem}
+  .login-card{
+    background:var(--card);border:1px solid var(--border);border-radius:20px;
+    padding:2.5rem 2rem;max-width:420px;width:100%;text-align:center;
+    box-shadow:0 30px 80px rgba(0,0,0,.5);
+  }
+  .login-card h1{
+    font-size:2rem;font-weight:900;margin-bottom:.3rem;
+    background:linear-gradient(135deg,var(--truth),var(--dare));
+    -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
+  }
+  .login-card p{color:var(--muted);font-size:.88rem;margin-bottom:1.8rem}
+  .btn-google{
+    width:100%;background:#fff;color:#333;padding:.9rem;border-radius:12px;
+    font-size:.95rem;font-weight:700;display:flex;align-items:center;justify-content:center;
+    gap:.6rem;transition:.2s;
+  }
+  .btn-google:hover{transform:translateY(-2px);box-shadow:0 8px 25px rgba(255,255,255,.2)}
+  .google-icon{width:20px;height:20px}
+
+  .app-header{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:.8rem 1.2rem;background:var(--card);border-bottom:1px solid var(--border);
+    position:sticky;top:0;z-index:100;
+  }
+  .app-header .brand{
+    font-size:1.1rem;font-weight:900;
+    background:linear-gradient(135deg,var(--truth),var(--dare));
+    -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
+  }
+  .app-header .user-info{display:flex;align-items:center;gap:.5rem;font-size:.85rem}
+  .user-avatar{
+    width:32px;height:32px;border-radius:50%;background:var(--card-2);
+    display:flex;align-items:center;justify-content:center;
+    overflow:hidden;border:2px solid var(--border);
+  }
+  .user-avatar img{width:100%;height:100%;object-fit:cover}
+  .btn-logout{
+    background:var(--card-2);color:var(--muted);padding:.35rem .8rem;
+    border-radius:8px;font-size:.78rem;font-weight:600;
+  }
+  .btn-logout:hover{color:var(--dare)}
+
+  .container{max-width:900px;margin:auto;padding:1.2rem}
+  .card{
+    background:var(--card);border:1px solid var(--border);border-radius:20px;
+    padding:1.5rem;margin-bottom:1.2rem;box-shadow:0 20px 60px rgba(0,0,0,.4);
+  }
+  .card h2{font-size:1.1rem;margin-bottom:1rem;display:flex;align-items:center;gap:.5rem}
+
+  .lobby-tabs{display:flex;gap:.5rem;margin-bottom:1.2rem}
+  .lobby-tab{
+    flex:1;padding:.8rem;border-radius:12px;font-size:.9rem;font-weight:700;
+    background:var(--card-2);color:var(--muted);transition:.2s;
+  }
+  .lobby-tab.active{background:linear-gradient(135deg,var(--truth),var(--dare));color:#fff}
+  .form-group{margin-bottom:1rem}
+  .form-group label{display:block;font-size:.8rem;color:var(--muted);margin-bottom:.4rem;font-weight:600}
+  .form-group input{
+    width:100%;background:var(--card-2);border:1.5px solid var(--border);
+    color:var(--text);padding:.85rem 1rem;border-radius:12px;font-size:.95rem;
+  }
+  .form-group input:focus{outline:none;border-color:var(--dare)}
+  .btn-primary{
+    width:100%;background:linear-gradient(135deg,var(--dare),#ff6b35);
+    color:#fff;padding:1rem;border-radius:14px;font-size:1rem;font-weight:900;
+    transition:.2s;box-shadow:0 8px 25px rgba(255,45,117,.35);
+  }
+  .btn-primary:hover{transform:translateY(-3px);box-shadow:0 12px 35px rgba(255,45,117,.5)}
+  .btn-primary:disabled{opacity:.4;cursor:not-allowed;transform:none;box-shadow:none}
+
+  .room-header{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.5rem;margin-bottom:1rem}
+  .room-code{
+    background:var(--card-2);padding:.5rem .9rem;border-radius:10px;
+    font-family:monospace;font-size:1rem;font-weight:800;color:var(--gold);
+    letter-spacing:2px;
+  }
+  .qr-box{text-align:center;padding:1rem;background:var(--card-2);border-radius:14px;margin-bottom:1rem}
+  .qr-box #qrcode{display:inline-block;padding:10px;background:#fff;border-radius:10px}
+  .qr-box p{font-size:.8rem;color:var(--muted);margin-top:.6rem}
+
+  .players-grid{
+    display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:.6rem;margin-bottom:1rem;
+  }
+  .player-box{
+    background:var(--card-2);border:1.5px solid var(--border);border-radius:12px;
+    padding:.7rem;text-align:center;position:relative;transition:.2s;
+  }
+  .player-box.host{border-color:var(--gold)}
+  .player-box.me{border-color:var(--truth)}
+  .player-box .p-avatar{
+    width:44px;height:44px;border-radius:50%;margin:0 auto .4rem;
+    background:var(--card);display:flex;align-items:center;justify-content:center;
+    overflow:hidden;font-weight:800;
+  }
+  .player-box .p-avatar img{width:100%;height:100%;object-fit:cover}
+  .player-box .p-name{font-size:.85rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .player-box .p-role{font-size:.68rem;color:var(--muted);margin-top:.15rem}
+  .player-box .p-role.host-role{color:var(--gold)}
+  .player-box .p-score{
+    position:absolute;top:.4rem;right:.4rem;background:var(--gold);color:#000;
+    font-size:.68rem;font-weight:800;padding:.1rem .4rem;border-radius:8px;
+  }
+
+  .turn-banner{
+    text-align:center;padding:1rem;background:linear-gradient(135deg,rgba(0,217,255,.1),rgba(255,45,117,.1));
+    border-radius:14px;margin-bottom:1rem;border:1px solid var(--border);
+  }
+  .turn-banner .tb-title{font-size:.78rem;color:var(--muted);text-transform:uppercase;letter-spacing:2px}
+  .turn-banner .tb-name{
+    font-size:1.6rem;font-weight:900;
+    background:linear-gradient(135deg,var(--gold),#ffaa00);
+    -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
+    margin:.3rem 0;
+  }
+  .turn-banner .tb-sub{font-size:.85rem;color:var(--muted)}
+
+  .choice-grid{display:grid;grid-template-columns:1fr 1fr;gap:.8rem;margin-bottom:1rem}
+  @media (max-width:500px){.choice-grid{grid-template-columns:1fr}}
+  .choice-btn{padding:1.5rem 1rem;border-radius:16px;font-size:1.1rem;font-weight:900;transition:.25s}
+  .choice-btn .em{display:block;font-size:2rem;margin-bottom:.4rem}
+  .choice-btn.truth{
+    background:linear-gradient(135deg,rgba(0,217,255,.2),rgba(0,217,255,.05));
+    border:2px solid var(--truth);color:var(--truth);
+  }
+  .choice-btn.truth:hover{background:var(--truth);color:#000;transform:translateY(-3px)}
+  .choice-btn.dare{
+    background:linear-gradient(135deg,rgba(255,45,117,.2),rgba(255,45,117,.05));
+    border:2px solid var(--dare);color:var(--dare);
+  }
+  .choice-btn.dare:hover{background:var(--dare);color:#fff;transform:translateY(-3px)}
+
+  .challenge-display{
+    background:var(--card-2);border-radius:16px;padding:1.5rem;text-align:center;
+    margin-bottom:1rem;position:relative;overflow:hidden;
+  }
+  .challenge-display::before{content:'';position:absolute;top:0;left:0;right:0;height:4px}
+  .challenge-display.truth-display::before{background:var(--truth)}
+  .challenge-display.dare-display::before{background:var(--dare)}
+  .cd-type{font-size:.75rem;font-weight:800;letter-spacing:3px;text-transform:uppercase;margin-bottom:.8rem}
+  .challenge-display.truth-display .cd-type{color:var(--truth)}
+  .challenge-display.dare-display .cd-type{color:var(--dare)}
+  .cd-text{font-size:1.15rem;font-weight:700;line-height:1.5}
+  .cd-actions{display:flex;gap:.6rem;justify-content:center;flex-wrap:wrap;margin-top:1rem}
+  .btn-approve{background:linear-gradient(135deg,var(--green),#16a34a);color:#fff;padding:.7rem 1.4rem;border-radius:10px;font-weight:700;font-size:.88rem}
+  .btn-reject{background:var(--card);color:var(--muted);border:1.5px solid var(--border);padding:.7rem 1.4rem;border-radius:10px;font-weight:700;font-size:.88rem}
+  .btn-reject:hover{color:var(--dare);border-color:var(--dare)}
+
+  .status-wait{
+    text-align:center;padding:1.5rem;color:var(--muted);font-size:.9rem;
+    background:var(--card-2);border-radius:14px;margin-bottom:1rem;
+  }
+  .status-wait .spin{
+    display:inline-block;width:16px;height:16px;border:2px solid var(--muted);
+    border-top-color:var(--dare);border-radius:50%;animation:spin 1s linear infinite;
+    margin-right:.5rem;vertical-align:middle;
+  }
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  .score-list{margin-bottom:1rem}
+  .score-row{
+    display:flex;align-items:center;gap:.7rem;padding:.65rem 0;
+    border-bottom:1px solid var(--border);font-size:.9rem;
+  }
+  .score-row:last-child{border-bottom:none}
+  .score-row .rank{width:28px;text-align:center;font-weight:800;color:var(--muted)}
+  .score-row .rank.gold{color:var(--gold);font-size:1.1rem}
+  .score-row .s-avatar{width:32px;height:32px;border-radius:50%;overflow:hidden;background:var(--card-2);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-weight:800}
+  .score-row .s-avatar img{width:100%;height:100%;object-fit:cover}
+  .score-row .s-name{flex:1;font-weight:600}
+  .score-row .s-points{
+    background:linear-gradient(135deg,var(--gold),#ffaa00);color:#000;
+    font-weight:900;padding:.2rem .7rem;border-radius:10px;font-size:.85rem;
+  }
+
+  .winner-screen{text-align:center;padding:2rem 1rem}
+  .winner-crown{font-size:5rem;animation:bounce 1s ease infinite alternate}
+  @keyframes bounce{to{transform:translateY(-10px)}}
+  .winner-name{
+    font-size:2rem;font-weight:900;margin:1rem 0;
+    background:linear-gradient(135deg,var(--gold),#ffaa00);
+    -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
+  }
+  .winner-sub{color:var(--muted);margin-bottom:1.5rem}
+
+  .toast-wrap{
+    position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%);z-index:1000;
+    display:flex;flex-direction:column;gap:.5rem;align-items:center;pointer-events:none;
+  }
+  .toast{
+    background:var(--card);border:1.5px solid var(--border);color:var(--text);
+    padding:.75rem 1.3rem;border-radius:12px;font-size:.85rem;font-weight:600;
+    box-shadow:0 10px 30px rgba(0,0,0,.5);animation:toastIn .3s ease;
+  }
+  @keyframes toastIn{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+  .toast.success{border-color:var(--green);color:#4ade80}
+  .toast.error{border-color:var(--red);color:#f87171}
+</style>
+</head>
+<body>
+
+<div class="login-screen" id="loginScreen">
+  <div class="login-card">
+    <div style="font-size:3.5rem;margin-bottom:.5rem">🎯</div>
+    <h1>Truth or Dare</h1>
+    <p>বন্ধুদের সাথে অনলাইনে খেলুন</p>
+    <button class="btn-google" onclick="signInWithGoogle()">
+      <svg class="google-icon" viewBox="0 0 48 48">
+        <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3c-1.6 4.7-6.1 8-11.3 8-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.2-.1-2.3-.4-3.5z"/>
+        <path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/>
+        <path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.2 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z"/>
+        <path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.3-2.2 4.3-4.1 5.6l6.2 5.2C36.9 40 44 34 44 24c0-1.2-.1-2.3-.4-3.5z"/>
+      </svg>
+      Google দিয়ে লগইন করুন
+    </button>
+  </div>
+</div>
+
+<div id="app" class="hidden">
+  <header class="app-header">
+    <div class="brand">🎯 Truth or Dare</div>
+    <div class="user-info">
+      <div class="user-avatar"><img id="userPhoto" src="" alt=""></div>
+      <span id="userName">—</span>
+      <button class="btn-logout" onclick="logout()">লগআউট</button>
+    </div>
+  </header>
+
+  <div class="container">
+    <div id="lobbyPage">
+      <div class="card">
+        <div class="lobby-tabs">
+          <button class="lobby-tab active" onclick="switchLobbyTab('create')">🏠 রুম তৈরি</button>
+          <button class="lobby-tab" onclick="switchLobbyTab('join')">🔗 রুমে যোগ দিন</button>
+        </div>
+        <div id="createTab">
+          <div class="form-group">
+            <label>আপনার নাম (গেমে দেখাবে)</label>
+            <input type="text" id="playerName" placeholder="আপনার নাম" maxlength="20">
+          </div>
+          <div class="form-group">
+            <label>গেম শেষ হবে কত পয়েন্টে?</label>
+            <input type="number" id="targetPoints" value="10" min="5" max="50">
+          </div>
+          <button class="btn-primary" onclick="createRoom()">🎮 রুম তৈরি করুন</button>
+        </div>
+        <div id="joinTab" class="hidden">
+          <div class="form-group">
+            <label>আপনার নাম (গেমে দেখাবে)</label>
+            <input type="text" id="joinName" placeholder="আপনার নাম" maxlength="20">
+          </div>
+          <div class="form-group">
+            <label>রুম কোড</label>
+            <input type="text" id="joinCode" placeholder="৬ অক্ষরের কোড" maxlength="6" style="text-transform:uppercase;font-family:monospace;letter-spacing:3px">
+          </div>
+          <button class="btn-primary" onclick="joinRoom()">🚪 রুমে ঢুকুন</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="roomPage" class="hidden">
+      <div class="card">
+        <div class="room-header">
+          <div>
+            <div style="font-size:.75rem;color:var(--muted);margin-bottom:.3rem">রুম কোড</div>
+            <div class="room-code" id="roomCodeDisplay">------</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:.75rem;color:var(--muted)">টার্গেট</div>
+            <div style="font-size:1.3rem;font-weight:900;color:var(--gold)" id="targetDisplay">10</div>
+          </div>
+        </div>
+        <div class="qr-box">
+          <div id="qrcode"></div>
+          <p>📱 QR স্ক্যান করুন বা কোড শেয়ার করুন</p>
+        </div>
+        <h3 style="font-size:.95rem;margin-bottom:.7rem">👥 প্লেয়ার (<span id="playerCount">0</span>)</h3>
+        <div class="players-grid" id="playersGrid"></div>
+        <button class="btn-primary hidden" id="startGameBtn" onclick="startGame()">🚀 গেম শুরু করুন</button>
+        <p id="waitingMsg" style="text-align:center;color:var(--muted);font-size:.85rem;margin-top:1rem">
+          অন্যান্য প্লেয়ারদের অপেক্ষা করা হচ্ছে...
+        </p>
+      </div>
+    </div>
+
+    <div id="gamePage" class="hidden">
+      <div class="card">
+        <div class="turn-banner">
+          <div class="tb-title">এখন কার পালা</div>
+          <div class="tb-name" id="turnName">—</div>
+          <div class="tb-sub" id="turnSub">—</div>
+        </div>
+        <div id="choosePhase" class="hidden">
+          <div class="choice-grid">
+            <button class="choice-btn truth" onclick="chooseType('truth')"><span class="em">💬</span>TRUTH</button>
+            <button class="choice-btn dare" onclick="chooseType('dare')"><span class="em">🔥</span>DARE</button>
+          </div>
+        </div>
+        <div id="performPhase" class="hidden">
+          <div class="challenge-display" id="challengeDisplay">
+            <div class="cd-type" id="cdType">TRUTH</div>
+            <div class="cd-text" id="cdText">—</div>
+          </div>
+          <p style="text-align:center;color:var(--muted);font-size:.85rem">✅ সম্পন্ন করলে অ্যাপ্রুভালের অপেক্ষা করুন</p>
+          <button class="btn-primary" style="margin-top:.8rem" onclick="markDone()">✅ আমি সম্পন্ন করেছি</button>
+        </div>
+        <div id="waitApprovalPhase" class="hidden">
+          <div class="status-wait"><span class="spin"></span>অ্যাপ্রুভালের অপেক্ষা...</div>
+        </div>
+        <div id="approvePhase" class="hidden">
+          <div class="challenge-display" id="approveDisplay">
+            <div class="cd-type" id="apType">TRUTH</div>
+            <div class="cd-text" id="apText">—</div>
+            <div style="font-size:.8rem;color:var(--muted);margin-top:.8rem" id="apFor"></div>
+          </div>
+          <div class="cd-actions">
+            <button class="btn-approve" onclick="approveChallenge(true)">✅ অ্যাপ্রুভ</button>
+            <button class="btn-reject" onclick="approveChallenge(false)">❌ রিজেক্ট</button>
+          </div>
+        </div>
+        <div id="spectatorPhase" class="hidden">
+          <div class="status-wait"><span class="spin"></span>অন্যরা খেলছে...</div>
+        </div>
+      </div>
+      <div class="card">
+        <h2>🏆 স্কোরবোর্ড</h2>
+        <div class="score-list" id="scoreList"></div>
+      </div>
+    </div>
+
+    <div id="winnerPage" class="hidden">
+      <div class="card">
+        <div class="winner-screen">
+          <div class="winner-crown">👑</div>
+          <div class="winner-name" id="winnerName">—</div>
+          <div class="winner-sub">বিজয়ী! 🎉</div>
+          <button class="btn-primary" onclick="backToLobby()">🏠 নতুন গেম</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast-wrap" id="toasts"></div>
+
+<script>
+/* ================================================================
+   আপনার Firebase কনফিগ
+   ================================================================ */
+const firebaseConfig = {
+  apiKey: "AIzaSyDrV-ckvqZmrVb5qvZsD9IuGBryM8u-NWc",
+  authDomain: "truth-dare-game-81029.firebaseapp.com",
+  databaseURL: "https://truth-dare-game-81029-default-rtdb.firebaseio.com",
+  projectId: "truth-dare-game-81029",
+  storageBucket: "truth-dare-game-81029.firebasestorage.app",
+  messagingSenderId: "449642840456",
+  appId: "1:449642840456:web:07078ceccbbb3a0068fa3d",
+  measurementId: "G-GKJYYTSDZP"
+};
+
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.database();
+
+let currentUser = null;
+let currentRoom = null;
+let roomRef = null;
+let roomListener = null;
+let myPlayerName = '';
+
+/* ================================================================
+   QUESTIONS
+   ================================================================ */
+const TRUTHS = [
+  'তুমি জীবনে সবচেয়ে বড় মিথ্যা কী বলেছ?',
+  'টিমের মধ্যে কাকে তুমি সবচেয়ে বেশি পছন্দ করো?',
+  'তুমি কখনো কাজ ফাঁকি দিয়েছ? কবে?',
+  'তোমার সবচেয়ে বড় ভয় কী?',
+  'তুমি জীবনে কতবার প্রেমে পড়েছ?',
+  'টিমের কার সাথে তুমি সবচেয়ে বেশি ঝগড়া করেছ?',
+  'তুমি কখনো বন্ধুর সিক্রেট ফাঁস করেছ?',
+  'তোমার সবচেয়ে বড় লজ্জার মুহূর্ত কী?',
+  'তুমি কত ঘণ্টা ফোন চালাও প্রতিদিন?',
+  'টিমের কে সবচেয়ে অলস তোমার মতে?',
+  'তুমি কখনো পরীক্ষায় নকল করেছ?',
+  'তোমার জীবনের সবচেয়ে বড় regret কী?',
+  'তুমি কার নামে সবচেয়ে বেশি সার্চ করেছ?',
+  'তুমি কখনো বন্ধুকে ঠকিয়েছ?',
+  'তোমার সবচেয়ে অদ্ভুত অভ্যাস কী?'
+];
+const DARES = [
+  'পরের ৩০ সেকেন্ড একটা হাস্যকর নাচ দেখাও 💃',
+  'তোমার ফোনের শেষ ছবিটা সবাইকে দেখাও 📸',
+  'একটা মজার প্রাণীর শব্দ করো 🐒',
+  'তোমার পাশের মানুষকে একটা ভালো কমপ্লিমেন্ট দাও 😊',
+  'গত রাতে কী স্বপ্ন দেখেছ সেটা নাটক করে দেখাও 🎭',
+  'আগামী ১ মিনিট সবাইকে "স্যার" বলে ডাকো 🙇',
+  'তোমার প্রিয় গানের একটা লাইন গেয়ে শোনাও 🎤',
+  'তোমার সবচেয়ে খারাপ ছবিটা বন্ধুকে পাঠাও 📤',
+  'পরের ১ মিনিট শুধু ইংরেজিতে কথা বলো 🇬🇧',
+  'একটা মজার জোকস বলো — না হাসলে আবার বলো 😂',
+  'টিমের একজনকে জড়িয়ে ধরো 🤗',
+  'তোমার ফোনের সবচেয়ে পুরনো মেসেজটা পড়ে শোনাও 📱',
+  'একটা মজার পোজে ১০ সেকেন্ড দাঁড়াও 🧍',
+  'সবাইকে তোমার একটা লুকানো প্রতিভা দেখাও 🎨',
+  'টিমের একজনকে অনুকরণ করো 🎭'
+];
+
+/* ================================================================
+   Auth
+   ================================================================ */
+function signInWithGoogle() {
+  const provider = new firebase.auth.GoogleAuthProvider();
+  auth.signInWithPopup(provider).catch(err => {
+    toast('লগইন ব্যর্থ: ' + err.message, 'error');
+  });
+}
+
+auth.onAuthStateChanged(user => {
+  if (user) {
+    currentUser = user;
+    document.getElementById('loginScreen').classList.add('hidden');
+    document.getElementById('app').classList.remove('hidden');
+    document.getElementById('userName').textContent = user.displayName || user.email.split('@')[0];
+    document.getElementById('userPhoto').src = user.photoURL || '';
+    const savedName = localStorage.getItem('tod_name');
+    if (savedName) {
+      document.getElementById('playerName').value = savedName;
+      document.getElementById('joinName').value = savedName;
+    }
+    checkUrlRoom();
+  } else {
+    currentUser = null;
+    document.getElementById('loginScreen').classList.remove('hidden');
+    document.getElementById('app').classList.add('hidden');
+  }
+});
+
+function logout() {
+  leaveRoom().then(() => auth.signOut());
+}
+
+/* ================================================================
+   Lobby
+   ================================================================ */
+function switchLobbyTab(tab) {
+  document.querySelectorAll('.lobby-tab').forEach((t, i) => {
+    t.classList.toggle('active', (i === 0 && tab === 'create') || (i === 1 && tab === 'join'));
+  });
+  document.getElementById('createTab').classList.toggle('hidden', tab !== 'create');
+  document.getElementById('joinTab').classList.toggle('hidden', tab !== 'join');
+}
+
+function genRoomCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = '';
+  for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
+  return code;
+}
+
+async function createRoom() {
+  const name = document.getElementById('playerName').value.trim();
+  const target = parseInt(document.getElementById('targetPoints').value) || 10;
+  if (!name) { toast('নাম দিন', 'error'); return; }
+  if (target < 5) { toast('কমপক্ষে ৫ পয়েন্ট', 'error'); return; }
+
+  myPlayerName = name;
+  localStorage.setItem('tod_name', name);
+
+  // check code uniqueness
+  let code;
+  for (let i = 0; i < 5; i++) {
+    code = genRoomCode();
+    const snap = await db.ref('rooms/' + code).get();
+    if (!snap.exists()) break;
+  }
+
+  const room = {
+    code,
+    host: currentUser.uid,
+    target,
+    status: 'waiting',
+    createdAt: Date.now(),
+    players: {
+      [currentUser.uid]: {
+        uid: currentUser.uid,
+        name,
+        photo: currentUser.photoURL || '',
+        score: 0,
+        isHost: true
+      }
+    },
+    turn: { giver: null, receiver: null, type: null, challenge: null, status: null }
+  };
+
+  await db.ref('rooms/' + code).set(room);
+  enterRoom(code);
+}
+
+async function joinRoom() {
+  const name = document.getElementById('joinName').value.trim();
+  const code = document.getElementById('joinCode').value.trim().toUpperCase();
+  if (!name) { toast('নাম দিন', 'error'); return; }
+  if (code.length !== 6) { toast('৬ অক্ষরের কোড দিন', 'error'); return; }
+
+  myPlayerName = name;
+  localStorage.setItem('tod_name', name);
+
+  const snap = await db.ref('rooms/' + code).get();
+  if (!snap.exists()) { toast('রুম পাওয়া যায়নি', 'error'); return; }
+  const room = snap.val();
+  if (room.status !== 'waiting') { toast('গেম ইতিমধ্যে শুরু হয়েছে', 'error'); return; }
+
+  await db.ref(`rooms/${code}/players/${currentUser.uid}`).set({
+    uid: currentUser.uid,
+    name,
+    photo: currentUser.photoURL || '',
+    score: 0,
+    isHost: false
+  });
+  enterRoom(code);
+}
+
+/* ================================================================
+   Room
+   ================================================================ */
+function enterRoom(code) {
+  currentRoom = code;
+  document.getElementById('lobbyPage').classList.add('hidden');
+  document.getElementById('roomPage').classList.remove('hidden');
+  document.getElementById('roomCodeDisplay').textContent = code;
+
+  const joinUrl = location.origin + location.pathname + '?room=' + code;
+  const qrBox = document.getElementById('qrcode');
+  qrBox.innerHTML = '';
+  new QRCode(qrBox, { text: joinUrl, width: 160, height: 160 });
+
+  if (roomRef && roomListener) roomRef.off('value', roomListener);
+  roomRef = db.ref('rooms/' + code);
+  roomListener = roomRef.on('value', snap => {
+    if (!snap.exists()) { leaveRoom(); return; }
+    const room = snap.val();
+    renderRoom(room);
+  });
+}
+
+function renderRoom(room) {
+  const players = Object.values(room.players || {});
+  document.getElementById('playerCount').textContent = players.length;
+  document.getElementById('targetDisplay').textContent = room.target;
+
+  const grid = document.getElementById('playersGrid');
+  grid.innerHTML = players.map(p => {
+    const isMe = p.uid === currentUser.uid;
+    const isHost = p.uid === room.host;
+    let roleText = '';
+    if (isHost) roleText = '👑 হোস্ট';
+    else if (isMe) roleText = 'আপনি';
+    return `
+      <div class="player-box ${isHost?'host':''} ${isMe?'me':''}">
+        <div class="p-avatar">
+          ${p.photo ? `<img src="${p.photo}" alt="">` : p.name.charAt(0).toUpperCase()}
+        </div>
+        <div class="p-name">${escapeHtml(p.name)}</div>
+        ${roleText ? `<div class="p-role ${isHost?'host-role':''}">${roleText}</div>` : ''}
+        <div class="p-score">${p.score || 0}</div>
+      </div>
+    `;
+  }).join('');
+
+  const isHost = room.host === currentUser.uid;
+  const startBtn = document.getElementById('startGameBtn');
+  const waitMsg = document.getElementById('waitingMsg');
+  if (room.status === 'waiting') {
+    document.getElementById('roomPage').classList.remove('hidden');
+    document.getElementById('gamePage').classList.add('hidden');
+    document.getElementById('winnerPage').classList.add('hidden');
+    if (isHost) {
+      startBtn.classList.toggle('hidden', players.length < 2);
+      waitMsg.classList.toggle('hidden', players.length >= 2);
+      waitMsg.textContent = 'কমপক্ষে ২ জন প্লেয়ার দরকার...';
+    } else {
+      startBtn.classList.add('hidden');
+      waitMsg.classList.remove('hidden');
+      waitMsg.textContent = 'হোস্ট গেম শুরু করলে আপনি ঢুকে যাবেন...';
+    }
+  } else if (room.status === 'playing') {
+    document.getElementById('roomPage').classList.add('hidden');
+    document.getElementById('gamePage').classList.remove('hidden');
+    document.getElementById('winnerPage').classList.add('hidden');
+    renderGame(room);
+  } else if (room.status === 'finished') {
+    showWinner(room);
+  }
+}
+
+function startGame() {
+  if (!roomRef) return;
+  roomRef.update({ status: 'playing', turn: { giver: null, receiver: null, type: null, challenge: null, status: null } });
+  setTimeout(() => nextTurnInternal(), 500);
+}
+
+/* ================================================================
+   Game logic
+   ================================================================ */
+function renderGame(room) {
+  const turn = room.turn || {};
+  const giver = turn.giver ? room.players[turn.giver] : null;
+  const receiver = turn.receiver ? room.players[turn.receiver] : null;
+
+  let bannerName = '—';
+  let bannerSub = '';
+  if (turn.status === 'choosing' && giver) {
+    bannerName = giver.name;
+    bannerSub = 'Truth নাকি Dare দেবে?';
+  } else if (turn.status === 'performing' && receiver) {
+    bannerName = receiver.name;
+    bannerSub = `${giver.name} দিয়েছে — সম্পন্ন করো`;
+  } else if (turn.status === 'approving' && giver) {
+    bannerName = giver.name;
+    bannerSub = `${receiver.name} সম্পন্ন করেছে — অ্যাপ্রুভ করো`;
+  } else {
+    bannerName = '...';
+    bannerSub = 'পরের পালা আসছে';
+  }
+  document.getElementById('turnName').textContent = bannerName;
+  document.getElementById('turnSub').textContent = bannerSub;
+
+  const myUid = currentUser.uid;
+  const phases = ['choosePhase','performPhase','waitApprovalPhase','approvePhase','spectatorPhase'];
+  phases.forEach(id => document.getElementById(id).classList.add('hidden'));
+
+  if (turn.status === 'choosing') {
+    if (turn.giver === myUid) document.getElementById('choosePhase').classList.remove('hidden');
+    else document.getElementById('spectatorPhase').classList.remove('hidden');
+  } else if (turn.status === 'performing') {
+    if (turn.receiver === myUid) {
+      const cd = document.getElementById('challengeDisplay');
+      cd.className = 'challenge-display ' + (turn.type === 'truth' ? 'truth-display' : 'dare-display');
+      document.getElementById('cdType').textContent = turn.type === 'truth' ? '💬 TRUTH' : '🔥 DARE';
+      document.getElementById('cdText').textContent = turn.challenge;
+      document.getElementById('performPhase').classList.remove('hidden');
+    } else {
+      document.getElementById('spectatorPhase').classList.remove('hidden');
+    }
+  } else if (turn.status === 'approving') {
+    if (turn.giver === myUid) {
+      const cd = document.getElementById('approveDisplay');
+      cd.className = 'challenge-display ' + (turn.type === 'truth' ? 'truth-display' : 'dare-display');
+      document.getElementById('apType').textContent = turn.type === 'truth' ? '💬 TRUTH' : '🔥 DARE';
+      document.getElementById('apText').textContent = turn.challenge;
+      document.getElementById('apFor').textContent = `${receiver.name} বলেছে সম্পন্ন করেছে`;
+      document.getElementById('approvePhase').classList.remove('hidden');
+    } else if (turn.receiver === myUid) {
+      document.getElementById('waitApprovalPhase').classList.remove('hidden');
+    } else {
+      document.getElementById('spectatorPhase').classList.remove('hidden');
+    }
+  }
+
+  renderScore(room);
+}
+
+function renderScore(room) {
+  const players = Object.values(room.players || {}).sort((a,b) => (b.score||0) - (a.score||0));
+  const list = document.getElementById('scoreList');
+  list.innerHTML = players.map((p, i) => {
+    const rank = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i+1);
+    return `
+      <div class="score-row">
+        <div class="rank ${i===0?'gold':''}">${rank}</div>
+        <div class="s-avatar">${p.photo?`<img src="${p.photo}">` : p.name.charAt(0).toUpperCase()}</div>
+        <div class="s-name">${escapeHtml(p.name)}</div>
+        <div class="s-points">${p.score||0}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+async function nextTurnInternal() {
+  const snap = await roomRef.get();
+  if (!snap.exists()) return;
+  const room = snap.val();
+  if (room.status !== 'playing') return;
+  const players = Object.keys(room.players || {});
+  if (players.length < 2) return;
+
+  const giverIdx = Math.floor(Math.random() * players.length);
+  const giver = players[giverIdx];
+  let receiverIdx;
+  do { receiverIdx = Math.floor(Math.random() * players.length); } while (receiverIdx === giverIdx);
+  const receiver = players[receiverIdx];
+
+  await roomRef.update({
+    turn: { giver, receiver, type: null, challenge: null, status: 'choosing' }
+  });
+}
+
+async function chooseType(type) {
+  const snap = await roomRef.get();
+  if (!snap.exists()) return;
+  const room = snap.val();
+  const pool = type === 'truth' ? TRUTHS : DARES;
+  const challenge = pool[Math.floor(Math.random() * pool.length)];
+  await roomRef.update({
+    turn: { ...room.turn, type, challenge, status: 'performing' }
+  });
+}
+
+async function markDone() {
+  await roomRef.update({ 'turn/status': 'approving' });
+}
+
+async function approveChallenge(approve) {
+  const snap = await roomRef.get();
+  if (!snap.exists()) return;
+  const room = snap.val();
+  if (!room || !room.turn) return;
+
+  if (approve) {
+    const receiver = room.turn.receiver;
+    const newScore = (room.players[receiver].score || 0) + 1;
+    await roomRef.update({ [`players/${receiver}/score`]: newScore });
+    if (newScore >= room.target) {
+      await roomRef.update({ status: 'finished', winner: receiver });
+      return;
+    }
+  }
+
+  setTimeout(() => nextTurnInternal(), 300);
+}
+
+function showWinner(room) {
+  document.getElementById('roomPage').classList.add('hidden');
+  document.getElementById('gamePage').classList.add('hidden');
+  document.getElementById('winnerPage').classList.remove('hidden');
+  const winner = room.players[room.winner];
+  document.getElementById('winnerName').textContent = winner ? winner.name : '—';
+}
+
+/* ================================================================
+   Leave / Cleanup
+   ================================================================ */
+async function leaveRoom() {
+  if (roomRef && currentRoom && currentUser) {
+    try {
+      const snap = await roomRef.get();
+      if (snap.exists()) {
+        const room = snap.val();
+        if (room.host === currentUser.uid) {
+          await roomRef.remove();
+        } else {
+          await db.ref(`rooms/${currentRoom}/players/${currentUser.uid}`).remove();
+        }
+      }
+    } catch(e) {}
+  }
+  if (roomRef && roomListener) roomRef.off('value', roomListener);
+  roomRef = null;
+  roomListener = null;
+  currentRoom = null;
+
+  document.getElementById('lobbyPage').classList.remove('hidden');
+  document.getElementById('roomPage').classList.add('hidden');
+  document.getElementById('gamePage').classList.add('hidden');
+  document.getElementById('winnerPage').classList.add('hidden');
+}
+
+function backToLobby() {
+  leaveRoom();
+}
+
+/* ================================================================
+   Utils
+   ================================================================ */
+function escapeHtml(s) {
+  return (s||'').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+function toast(msg, type='info') {
+  const w = document.getElementById('toasts');
+  const el = document.createElement('div');
+  el.className = 'toast ' + type;
+  el.textContent = msg;
+  w.appendChild(el);
+  setTimeout(() => {
+    el.style.opacity = '0';
+    el.style.transition = '.3s';
+    setTimeout(() => el.remove(), 300);
+  }, 3000);
+}
+
+/* ================================================================
+   URL ?room=XXX auto-join
+   ================================================================ */
+function checkUrlRoom() {
+  const params = new URLSearchParams(location.search);
+  const roomFromUrl = params.get('room');
+  if (roomFromUrl) {
+    switchLobbyTab('join');
+    document.getElementById('joinCode').value = roomFromUrl.toUpperCase();
+    const savedName = localStorage.getItem('tod_name');
+    if (savedName) document.getElementById('joinName').value = savedName;
+    else document.getElementById('joinName').focus();
+  }
+}
+</script>
+
+</body>
+</html>
